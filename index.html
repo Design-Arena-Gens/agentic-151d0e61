@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Trading Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8f9ff;
+      --panel: rgba(240, 249, 255, 0.65); /* requested */
+      --panel-solid: #e6f0ff; /* panels */
+      --chart-area: #d4e4ff; /* charts */
+      --pos: #c8e6c9; /* positive */
+      --neg: #ffccbc; /* negative */
+      --pred: #e1bee7; /* predictions */
+      --shadow-1: 0 4px 20px rgba(100, 100, 200, 0.08);
+      --shadow-2: 0 2px 6px rgba(70, 70, 180, 0.05);
+      --text: #1a2550;
+      --muted: #5a6aa8;
+      --glass: blur(10px);
+      --accent: #6c84ff;
+      --accent-2: #69db7c;
+      --accent-3: #ff7675;
+      --radius-xl: 18px;
+      --radius-lg: 14px;
+      --radius-md: 12px;
+      --radius-sm: 10px;
+      --hover-scale: 1.02;
+      --ease: 200ms ease;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(1200px 800px at 20% 10%, #f0f4ff 0%, var(--bg) 55%) no-repeat,
+                  linear-gradient(180deg, #f9fbff, var(--bg));
+      overflow-x: hidden;
+    }
+
+    .app {
+      max-width: 1200px;
+      margin: 28px auto 80px;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
+      border: 1px solid rgba(120, 140, 255, 0.18);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-1), var(--shadow-2);
+    }
+
+    .interactive {
+      transition: transform var(--ease), box-shadow var(--ease), background var(--ease), filter var(--ease);
+    }
+    .interactive:hover {
+      transform: scale(var(--hover-scale));
+      box-shadow: 0 10px 30px rgba(100, 100, 200, 0.18), 0 4px 12px rgba(70, 70, 180, 0.10);
+    }
+
+    /* Header: Market Overview */
+    .header {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 18px;
+      padding: 18px;
+    }
+    @media (max-width: 1000px) {
+      .header { grid-template-columns: 1fr; }
+    }
+
+    .ticker {
+      position: relative;
+      overflow: hidden;
+      height: 64px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .ticker-track {
+      display: flex;
+      gap: 26px;
+      white-space: nowrap;
+      will-change: transform;
+      animation: ticker-move 30s linear infinite;
+    }
+
+    @keyframes ticker-move { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    .ticker-item {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 10px;
+      background: rgba(230, 240, 255, 0.75);
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-2);
+      border: 1px solid rgba(120, 140, 255, 0.16);
+    }
+
+    .sym { font-weight: 700; letter-spacing: 0.2px; }
+    .price { font-weight: 600; }
+    .chg {
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      line-height: 1.6;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Portfolio */
+    .portfolio {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pv {
+      display: flex; flex-direction: column;
+    }
+    .pv .label { color: var(--muted); font-weight: 600; font-size: 13px; letter-spacing: 0.35px; }
+    .pv .value { font-size: 32px; font-weight: 800; letter-spacing: -0.4px; }
+
+    .delta {
+      font-weight: 800;
+      background: linear-gradient(90deg, #2ecc71, #27ae60);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      font-size: 16px;
+    }
+    .delta.negative {
+      background: linear-gradient(90deg, #ff5252, #e53935);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+
+    .portfolio-actions {
+      display: flex; gap: 10px;
+    }
+    .btn {
+      border: 1px solid rgba(120, 140, 255, 0.25);
+      background: rgba(230, 240, 255, 0.8);
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .btn.primary { background: linear-gradient(180deg, #eef3ff, #e6f0ff); }
+
+    /* Risk Meter */
+    .risk {
+      display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; padding: 16px;
+    }
+    .radial {
+      --pct: 42; /* default */
+      width: 70px; height: 70px; position: relative; border-radius: 50%;
+      background:
+        conic-gradient(
+          color-mix(in oklab, var(--accent) 75%, white) calc(var(--pct) * 1%),
+          rgba(120, 140, 255, 0.18) 0
+        );
+      display: grid; place-items: center;
+      box-shadow: var(--shadow-2);
+      border: 1px solid rgba(120, 140, 255, 0.25);
+    }
+    .radial::after {
+      content: attr(data-pct) "%";
+      font-weight: 800; font-size: 14px;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--panel);
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
+      display: grid; place-items: center;
+      border: 1px solid rgba(120, 140, 255, 0.25);
+      box-shadow: inset 0 2px 9px rgba(80, 90, 160, 0.08);
+    }
+    .risk-meta { display: flex; flex-direction: column; gap: 2px; }
+    .risk-title { font-weight: 800; letter-spacing: 0.2px; }
+    .risk-desc { color: var(--muted); font-size: 13px; }
+
+    /* Main grid */
+    .main {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 18px;
+      padding: 4px 18px 18px 18px;
+    }
+    @media (max-width: 1000px) { .main { grid-template-columns: 1fr; } }
+
+    /* Chart Panel */
+    .chart-panel { padding: 16px; display: grid; gap: 12px; }
+    .panel-title { font-weight: 800; letter-spacing: 0.3px; }
+    .chart-wrap {
+      background: color-mix(in oklab, var(--chart-area) 75%, white);
+      border-radius: var(--radius-lg);
+      padding: 10px;
+      border: 1px solid rgba(120, 140, 255, 0.18);
+      box-shadow: inset 0 2px 12px rgba(80, 90, 160, 0.06);
+      min-height: 260px;
+    }
+
+    /* Prediction Engine */
+    .pred-panel { padding: 16px; display: grid; gap: 14px; }
+    .pred-content { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 800px) { .pred-content { grid-template-columns: 1fr; } }
+
+    .cube-scene {
+      perspective: 800px; height: 240px; display: grid; place-items: center;
+    }
+    .cube {
+      position: relative; width: 140px; height: 140px; transform-style: preserve-3d;
+      animation: spin 10s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotateX(-20deg) rotateY(0deg); }
+      50% { transform: rotateX(20deg) rotateY(180deg); }
+      100% { transform: rotateX(-20deg) rotateY(360deg); }
+    }
+    .cube-face {
+      position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+      background: rgba(225, 190, 231, 0.55); /* predictions */
+      border: 1px solid rgba(120, 140, 255, 0.20);
+      box-shadow: var(--shadow-2);
+      border-radius: 12px;
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
+      font-weight: 800;
+      color: #5e2a6e;
+      padding: 10px;
+    }
+    .cube-face small { display: block; font-weight: 600; opacity: 0.8; }
+
+    .cube .front  { transform: translateZ(70px); }
+    .cube .back   { transform: rotateY(180deg) translateZ(70px); }
+    .cube .right  { transform: rotateY(90deg) translateZ(70px); }
+    .cube .left   { transform: rotateY(-90deg) translateZ(70px); }
+    .cube .top    { transform: rotateX(90deg) translateZ(70px); }
+    .cube .bottom { transform: rotateX(-90deg) translateZ(70px); }
+
+    .pred-stats { display: grid; gap: 10px; }
+    .stat {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+      background: rgba(230, 240, 255, 0.65); border: 1px solid rgba(120, 140, 255, 0.18);
+      padding: 12px; border-radius: 12px;
+    }
+    .badge { padding: 6px 10px; border-radius: 999px; font-weight: 800; }
+    .badge.pos { background: var(--pos); color: #1b5e20; }
+    .badge.neg { background: var(--neg); color: #b71c1c; }
+    .badge.pred { background: var(--pred); color: #4a148c; }
+
+    .controls { display: flex; gap: 10px; }
+    .slider-wrap { display: grid; gap: 6px; }
+    input[type="range"] { accent-color: var(--accent); }
+
+    .footnote { color: var(--muted); font-size: 12px; }
+
+    /* Micro-interactions: cards */
+    .clickable { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Market Overview Header -->
+    <div class="panel header">
+      <div class="panel ticker interactive">
+        <div class="ticker-track" id="tickerTrack">
+          <!-- duplicated set for seamless loop -->
+        </div>
+      </div>
+
+      <div class="panel portfolio interactive">
+        <div class="pv">
+          <div class="label">Portfolio Value</div>
+          <div class="value" id="pvValue">$128,420.33</div>
+          <div class="delta" id="pvDelta">+2.48% (24h)</div>
+        </div>
+        <div class="portfolio-actions">
+          <button class="btn primary interactive" id="rebalanceBtn">Rebalance</button>
+          <button class="btn interactive" id="buyDipBtn">Buy the Dip</button>
+        </div>
+      </div>
+
+      <div class="panel risk interactive">
+        <div class="radial" id="riskRadial" data-pct="42" style="--pct:42"></div>
+        <div class="risk-meta">
+          <div class="risk-title">Risk Exposure</div>
+          <div class="risk-desc" id="riskLabel">Moderate ? Balanced allocation</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+      <!-- Chart panel -->
+      <div class="panel chart-panel interactive">
+        <div class="panel-title">Equity Curve (Last 24h)</div>
+        <div class="chart-wrap">
+          <canvas id="equityChart" height="220"></canvas>
+        </div>
+        <div class="footnote">Shaded area uses the specified pastel chart color. Positive segments skew greener, negatives warmer.</div>
+      </div>
+
+      <!-- Prediction Engine -->
+      <div class="panel pred-panel interactive">
+        <div class="panel-title">Prediction Engine</div>
+        <div class="pred-content">
+          <div class="cube-scene">
+            <div class="cube" id="predCube">
+              <div class="cube-face front">Trend<small id="faceTrend">Up</small></div>
+              <div class="cube-face back">Volatility<small id="faceVol">Low</small></div>
+              <div class="cube-face right">Momentum<small id="faceMom">Strong</small></div>
+              <div class="cube-face left">Sentiment<small id="faceSent">Positive</small></div>
+              <div class="cube-face top">Signal<small id="faceSig">Buy</small></div>
+              <div class="cube-face bottom">Confidence<small id="faceConf">72%</small></div>
+            </div>
+          </div>
+          <div class="pred-stats">
+            <div class="stat">
+              <div>
+                <div style="font-weight:800">Next 4h Price Move</div>
+                <div class="footnote">AI simulated directional probability</div>
+              </div>
+              <span class="badge pred" id="moveBadge">+1.2% target</span>
+            </div>
+            <div class="stat">
+              <div>
+                <div style="font-weight:800">Confidence</div>
+                <div class="footnote">Derived from momentum and volatility regime</div>
+              </div>
+              <span class="badge pred" id="confBadge">72%</span>
+            </div>
+            <div class="stat">
+              <div>
+                <div style="font-weight:800">Risk Recommendation</div>
+                <div class="footnote">Adaptive exposure based on forecast dispersion</div>
+              </div>
+              <span class="badge pred" id="riskBadge">Moderate</span>
+            </div>
+            <div class="controls">
+              <button class="btn primary interactive clickable" id="genBtn">Generate Prediction</button>
+              <div class="slider-wrap">
+                <label for="riskSlider" class="footnote">Adjust Risk</label>
+                <input type="range" id="riskSlider" min="0" max="100" value="42" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Utility helpers
+    const $ = (sel) => document.querySelector(sel);
+
+    // Ticker data simulation
+    const symbols = [
+      { sym: 'BTC', price: 69000, chg: 0.8 },
+      { sym: 'ETH', price: 3550, chg: -0.4 },
+      { sym: 'AAPL', price: 192.12, chg: 0.3 },
+      { sym: 'TSLA', price: 242.41, chg: -0.9 },
+    ];
+
+    function renderTicker() {
+      const makeItem = (s) => {
+        const color = s.chg >= 0 ? 'var(--pos)' : 'var(--neg)';
+        const sign = s.chg >= 0 ? '+' : '';
+        return `<div class="ticker-item">
+          <span class="sym">${s.sym}</span>
+          <span class="price">${s.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+          <span class="chg" style="background:${color}">${sign}${s.chg.toFixed(2)}%</span>
+        </div>`;
+      };
+      const track = $('#tickerTrack');
+      // duplicate sequence for seamless scroll (50% offset in keyframes)
+      const html = [...symbols, ...symbols, ...symbols].map(makeItem).join('');
+      track.innerHTML = html;
+    }
+
+    function tickPrices() {
+      for (const s of symbols) {
+        const drift = (Math.random() - 0.5) * 0.6; // small drift
+        const noise = (Math.random() - 0.5) * 0.4;
+        const pct = drift + noise;
+        const priceMove = s.price * (pct / 100);
+        s.price = Math.max(0.01, s.price + priceMove);
+        s.chg = pct;
+      }
+      renderTicker();
+    }
+
+    // Portfolio value simulation with gradient delta
+    function updatePortfolio() {
+      const base = 125000;
+      const fluct = Math.sin(Date.now() / 60000) * 2000 + (Math.random() - 0.5) * 800;
+      const val = base + 3500 + fluct;
+      const pct = (fluct / (base + 3500)) * 100;
+      $('#pvValue').textContent = `$${val.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      const delta = $('#pvDelta');
+      delta.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}% (24h)`;
+      if (pct >= 0) delta.classList.remove('negative'); else delta.classList.add('negative');
+    }
+
+    // Risk radial + label
+    function setRisk(value) {
+      const radial = $('#riskRadial');
+      radial.style.setProperty('--pct', String(value));
+      radial.setAttribute('data-pct', String(value));
+      const label = $('#riskLabel');
+      let txt = 'Low';
+      if (value < 25) txt = 'Low ? Defensive';
+      else if (value < 60) txt = 'Moderate ? Balanced allocation';
+      else if (value < 85) txt = 'Elevated ? Tactical risk';
+      else txt = 'High ? Aggressive exposure';
+      label.textContent = txt;
+    }
+
+    // Chart.js line chart
+    let chart;
+    function setupChart() {
+      const ctx = document.getElementById('equityChart');
+      const N = 50;
+      const data = Array.from({ length: N }, (_, i) => ({
+        x: i, y: 100 + 8 * Math.sin(i / 4) + (Math.random() - 0.5) * 2
+      }));
+
+      const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 220);
+      gradient.addColorStop(0, 'rgba(108,132,255,0.35)');
+      gradient.addColorStop(1, 'rgba(108,132,255,0.02)');
+
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: 'Equity',
+            data,
+            borderColor: '#6c84ff',
+            backgroundColor: gradient,
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 0,
+            tension: 0.35,
+            segment: {
+              borderColor: ctx => (ctx.p0.parsed.y <= ctx.p1.parsed.y ? '#55b86e' : '#ff8a65')
+            }
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: true }
+          }
+        },
+        plugins: [{
+          id: 'areaBG',
+          beforeDraw(c, args, opts) {
+            const { ctx, chartArea } = c;
+            if (!chartArea) return;
+            ctx.save();
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--chart-area').trim();
+            ctx.globalAlpha = 0.45;
+            ctx.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+            ctx.restore();
+          }
+        }]
+      });
+
+      // Animate updates
+      setInterval(() => {
+        const last = chart.data.datasets[0].data.at(-1);
+        const nextX = last.x + 1;
+        const nextY = last.y + (Math.random() - 0.48) * 1.6;
+        chart.data.datasets[0].data.push({ x: nextX, y: nextY });
+        if (chart.data.datasets[0].data.length > 120) chart.data.datasets[0].data.shift();
+        chart.update('none');
+      }, 1500);
+    }
+
+    // Prediction engine simulation
+    function generatePrediction() {
+      // pseudo features
+      const momentum = Math.random();
+      const volatility = Math.random();
+      const sentiment = Math.random();
+      const baseMove = (momentum * 1.8 - volatility * 1.2 + (sentiment - 0.5) * 0.6);
+      const movePct = Math.max(-2.5, Math.min(2.5, baseMove * 2.2));
+      const conf = Math.round(55 + 40 * (momentum * (1 - volatility)));
+
+      // Update badges
+      const sign = movePct >= 0 ? '+' : '';
+      $('#moveBadge').textContent = `${sign}${movePct.toFixed(2)}% target`;
+      $('#confBadge').textContent = `${conf}%`;
+
+      const risk = Math.max(5, Math.min(95, Math.round(80 * volatility + 20 * (1 - sentiment))));
+      $('#riskBadge').textContent = risk < 30 ? 'Low' : risk < 60 ? 'Moderate' : risk < 85 ? 'Elevated' : 'High';
+      setRisk(risk);
+      $('#riskSlider').value = String(risk);
+
+      // Update cube faces
+      $('#faceTrend').textContent = movePct >= 0 ? 'Up' : 'Down';
+      $('#faceVol').textContent = volatility < 0.33 ? 'Low' : volatility < 0.66 ? 'Mid' : 'High';
+      $('#faceMom').textContent = momentum > 0.66 ? 'Strong' : momentum > 0.33 ? 'Neutral' : 'Weak';
+      $('#faceSent').textContent = sentiment > 0.6 ? 'Positive' : sentiment < 0.4 ? 'Negative' : 'Neutral';
+      $('#faceSig').textContent = movePct >= 0 ? 'Buy' : 'Hedge';
+      $('#faceConf').textContent = `${conf}%`;
+
+      // Nudge portfolio delta styling to match sign
+      const pvDelta = $('#pvDelta');
+      if (movePct >= 0) pvDelta.classList.remove('negative'); else pvDelta.classList.add('negative');
+    }
+
+    // Wire up controls
+    function setupControls() {
+      $('#genBtn').addEventListener('click', generatePrediction);
+      $('#rebalanceBtn').addEventListener('click', () => {
+        // soft visual feedback
+        generatePrediction();
+      });
+      $('#buyDipBtn').addEventListener('click', () => {
+        generatePrediction();
+      });
+      $('#riskSlider').addEventListener('input', (e) => {
+        setRisk(Number(e.target.value));
+      });
+    }
+
+    // Init
+    renderTicker();
+    setInterval(tickPrices, 3500);
+    updatePortfolio();
+    setInterval(updatePortfolio, 4500);
+    setRisk(42);
+    setupChart();
+    setupControls();
+    generatePrediction();
+  </script>
+</body>
+</html>
